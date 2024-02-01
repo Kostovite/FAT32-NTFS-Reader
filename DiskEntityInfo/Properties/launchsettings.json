@@ -1,0 +1,10 @@
+﻿{
+    "profiles": {
+      "DiskEntityInfo (Package)": {
+        "commandName": "MsixPackage"
+      },
+      "DiskEntityInfo (Unpackaged)": {
+        "commandName": "Project"
+      }
+    }
+}
