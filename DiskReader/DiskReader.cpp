@@ -4,9 +4,6 @@
 #include <winioctl.h>
 #include <vector>
 
-//Default sector per track for CHS
-int sectorsPerTrack = 63;
-
 /// <summary>
 /// Class to represent part of the data of a disk sector
 /// </summary>
@@ -204,11 +201,6 @@ public:
 
 };
 
-//Convert CHS to physical sector number
-int chsToSector(int c, int h, int s) {
-	return (c * h + s - 1) * sectorsPerTrack;
-}
-
 //Explain partition entry
 void explainPartitionEntry(DiskSector &entry) {
 
@@ -308,7 +300,4 @@ void explainBootSector(const wchar_t* diskPath) {
 int main() {
     const wchar_t driveName[] = L"\\\\.\\PhysicalDrive3";
     readMBR(driveName);
-
-    /*const wchar_t bootSector[] = L"\\\\.\\I:";
-    explainBootSector(bootSector);*/
 }
