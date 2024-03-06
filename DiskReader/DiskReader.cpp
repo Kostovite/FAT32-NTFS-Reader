@@ -4,6 +4,12 @@
 #include <winioctl.h>
 #include <vector>
 
+//Default sector per track for CHS
+int sectorsPerTrack = 63;
+
+/// <summary>
+/// Class to represent part of the data of a disk sector
+/// </summary>
 class sectorData
 {
 private:
@@ -21,6 +27,9 @@ public:
     //Constructor
     sectorData(const std::vector<char>& data) : _data(data) {}
 
+    //Decstructor
+    ~sectorData() {}
+
     //Operator = to copy data
     sectorData& operator = (const sectorData& other)
     {
@@ -36,6 +45,12 @@ public:
 		this->_data = data;
 		return *this;
 	}
+
+    //Convert to vector
+    std::vector<char> toVector() const
+    {
+        return this->_data;
+    }
 
     void printVector(dataPresentation presentation) {
         switch (presentation) {
@@ -72,6 +87,9 @@ public:
 };
 
 // Define a struct to represent a disk sector
+/// <summary>
+/// Class to store a disk sector
+/// </summary>
 class DiskSector {
 private:
     wchar_t* _diskPath;    // Disk path
@@ -81,6 +99,11 @@ private:
 
 public:
     // Constructor
+    /// <summary>
+    /// Constructor
+    /// </summary>
+    /// <param name="path">Path to the disk</param>
+    /// <param name="sector">Sector number</param>
     DiskSector(const wchar_t* path, int sector) : _diskPath(const_cast<wchar_t*>(path)), _sectorNum(sector), _bytesRead(0) {
         _buffer = new char[getSectorSize()];
         this->readDiskSector();
@@ -89,6 +112,7 @@ public:
     // Destructor
     ~DiskSector() {
         delete[] _buffer;
+        _buffer = nullptr;
     }
 
     // Function to get the sector size
@@ -132,30 +156,6 @@ public:
     }
 
     // LITTLE ENDIAN
-    void readSectorLE(int offset, int size) {
-        if (offset < 0 || offset + size > this->getSectorSize()) {
-            std::cerr << "Error: Invalid offset and size." << std::endl;
-            return;
-        }
-
-        char* data = new char[size];
-        for (int i = offset + size - 1, j = 0; i >= offset; i--, j++) {
-            data[j] = static_cast<char>(this->_buffer[i]);
-        }
-
-        if (size == 1) {
-            std::cout << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(data[0] & 0xFF) << std::endl;
-        }
-        else {
-            for (int i = 0; i < size; ++i) {
-                std::cout << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(data[i] & 0xFF) << " ";
-            }
-            std::cout << std::endl;
-        }
-
-        delete[] data;
-    }
-
     sectorData saveSectorLE(int offset, int size) {
         std::vector<char> data;
 
@@ -175,30 +175,6 @@ public:
     }
 
     // BIG ENDIAN
-    void readSectorBE(int offset, int size) {
-        if (offset < 0 || offset + size > this->getSectorSize()) {
-            std::cerr << "Error: Invalid offset and size." << std::endl;
-            return;
-        }
-
-        char* data = new char[size];
-        for (int i = offset, j = 0; i < offset + size; i++, j++) {
-            data[j] = static_cast<char>(this->_buffer[i]);
-        }
-
-        if (size == 1) {
-            std::cout << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(data[0] & 0xFF) << std::endl;
-        }
-        else {
-            for (int i = 0; i < size; ++i) {
-                std::cout << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(data[i] & 0xFF) << " ";
-            }
-            std::cout << std::endl;
-        }
-
-        delete[] data;
-    }
-
     sectorData saveSectorBE(int offset, int size) {
 		std::vector<char> data;
 
@@ -228,27 +204,45 @@ public:
 
 };
 
-//Read NTFS MBR
-void readNTFS(const wchar_t* diskPath) {
+//Convert CHS to physical sector number
+int chsToSector(int c, int h, int s) {
+	return (c * h + s - 1) * sectorsPerTrack;
+}
+
+//Explain partition entry
+void explainPartitionEntry(DiskSector &entry) {
+
+    for (int ind = 0; ind < 4; ind++) {
+        std::cout << "Partition " << ind + 1 << " entry: ";
+        entry.saveSectorBE(0x1BE + 0x10 * ind, 16).printVector(sectorData::hex);
+
+		std::cout << "Status: ";
+		entry.saveSectorLE(0x1BE + 0x10 * ind, 1).printVector(sectorData::hex);
+
+		std::cout << "First sector CHS: ";
+		entry.saveSectorBE(0x1BE + 0x02 + 0x10 * ind, 3).printVector(sectorData::hex);
+
+        std::cout << "Last sector CHS: ";
+        entry.saveSectorBE(0x1BE + 0x05 + 0x10 * ind, 3).printVector(sectorData::hex);
+
+		std::cout << "Partition type: ";
+		entry.saveSectorLE(0x1BE + 0x04 + 0x10 * ind, 1).printVector(sectorData::hex);
+
+		std::cout << "First sector LBA: ";
+		entry.saveSectorLE(0x1BE + 0x08 + 0x10 * ind, 4).printVector(sectorData::dec);
+
+		std::cout << "Number of sectors: ";
+		entry.saveSectorLE(0x1BE + 0x0C + 0x10 * ind, 4).printVector(sectorData::dec);
+	}
+}
+
+//Read MBR
+void readMBR(const wchar_t* diskPath) {
 	//Create a DiskSector object for sector 0 of the disk
 	DiskSector sector(diskPath, 0);
     sector.printSector();
 
-    //Read entry 1 of the partition table
-    std::cout << "Partition 1: " << std::endl;
-    sector.readSectorBE(0x1BE, 16);
-
-    //Read entry 2 of the partition table
-    std::cout << "Partition 2: " << std::endl;
-    sector.readSectorBE(0x1CE, 16);
-
-    //Read entry 3 of the partition table
-    std::cout << "Partition 3: " << std::endl;
-    sector.readSectorBE(0x1DE, 16);
-
-    //Read entry 4 of the partition table
-    std::cout << "Partition 4: " << std::endl;
-    sector.readSectorBE(0x1EE, 16);
+    explainPartitionEntry(sector);
 }
 
 //Explain the boot sector
@@ -313,8 +307,8 @@ void explainBootSector(const wchar_t* diskPath) {
 
 int main() {
     const wchar_t driveName[] = L"\\\\.\\PhysicalDrive3";
-    
-    const wchar_t* diskPath = L"\\\\.\\I:";
-    explainBootSector(diskPath);
-  
+    readMBR(driveName);
+
+    /*const wchar_t bootSector[] = L"\\\\.\\I:";
+    explainBootSector(bootSector);*/
 }
