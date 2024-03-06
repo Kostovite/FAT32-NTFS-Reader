@@ -4,6 +4,73 @@
 #include <winioctl.h>
 #include <vector>
 
+class sectorData
+{
+private:
+    std::vector<char> _data;
+
+public:
+    //Enum for hex, dec, char
+    enum dataPresentation
+    {
+        hex = 16,
+        dec = 10,
+        chr = 256
+    };
+
+    //Constructor
+    sectorData(const std::vector<char>& data) : _data(data) {}
+
+    //Operator = to copy data
+    sectorData& operator = (const sectorData& other)
+    {
+        if (this != &other)
+        {
+			this->_data = other._data;
+		}
+		return *this;
+	}
+
+    sectorData& operator = (const std::vector<char>& data)
+    {
+		this->_data = data;
+		return *this;
+	}
+
+    void printVector(dataPresentation presentation) {
+        switch (presentation) {
+        case hex:
+            for (const char& c : this->_data) {
+                std::cout << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(c & 0xFF) << " ";
+            }
+            break;
+        case dec:
+        {
+            unsigned long int dec = 0;
+            for (const char& c : this->_data) {
+                dec = (dec << 8) + (c & 0xFF);
+            }
+            std::cout << std::dec << dec;
+        }
+        break;
+        case chr:
+            for (const char& c : this->_data) {
+                if (isprint(c)) {
+                    std::cout << c;
+                }
+                else {
+                    std::cout << "."; // Print a dot for non-printable characters
+                }
+            }
+            break;
+        default:
+            throw std::runtime_error("Error: Invalid data presentation type.");
+        }
+
+        std::cout << std::endl;
+    }
+};
+
 // Define a struct to represent a disk sector
 class DiskSector {
 private:
@@ -58,7 +125,7 @@ public:
         SetFilePointerEx(hDisk, li, NULL, FILE_BEGIN);
 
         if (!ReadFile(hDisk, this->_buffer, this->getSectorSize(), &this->_bytesRead, NULL)) {
-            std::cerr << "Error: Unable to read disk." << std::endl;
+            throw std::runtime_error("Error: Unable to read disk.");
         }
 
         CloseHandle(hDisk);
@@ -89,6 +156,24 @@ public:
         delete[] data;
     }
 
+    sectorData saveSectorLE(int offset, int size) {
+        std::vector<char> data;
+
+        if (offset < 0 || offset + size > this->getSectorSize()) {
+            throw std::runtime_error("Error: Invalid offset and size.");
+        }
+
+        data.reserve(size);
+
+        for (int i = offset + size - 1; i >= offset; i--) {
+            data.push_back(static_cast<char>(this->_buffer[i]));
+        }
+
+        sectorData sectorData = data;
+
+        return sectorData;
+    }
+
     // BIG ENDIAN
     void readSectorBE(int offset, int size) {
         if (offset < 0 || offset + size > this->getSectorSize()) {
@@ -113,6 +198,24 @@ public:
 
         delete[] data;
     }
+
+    sectorData saveSectorBE(int offset, int size) {
+		std::vector<char> data;
+
+        if (offset < 0 || offset + size > this->getSectorSize()) {
+			throw std::runtime_error("Error: Invalid offset and size.");
+		}
+
+		data.reserve(size);
+
+        for (int i = offset; i < offset + size; i++) {
+			data.push_back(static_cast<char>(this->_buffer[i]));
+		}
+
+		sectorData sectorData = data;
+
+		return sectorData;
+	}
 
     void printSector() {
         for (int i = 0; i < this->getSectorSize(); i++) {
@@ -154,49 +257,64 @@ void explainBootSector(const wchar_t* diskPath) {
     DiskSector sector(diskPath, 0);
 
     std::cout << "Bytes per sector: ";
-    sector.readSectorLE(0x0B, 2);
+    sector.saveSectorLE(0x0B, 2).printVector(sectorData::dec);
+
     std::cout << "Sectors per cluster: ";
-    sector.readSectorLE(0x0D, 1);
+    sector.saveSectorLE(0x0D, 1).printVector(sectorData::dec);
+
     std::cout << "Reserved sectors: ";
-    sector.readSectorLE(0x0E, 2);
+    sector.saveSectorLE(0x0E, 2).printVector(sectorData::dec);
+
     std::cout << "Number of FATs: ";
-    sector.readSectorLE(0x10, 1);
+    sector.saveSectorLE(0x10, 1).printVector(sectorData::dec);
+
     std::cout << "Root entries: ";
-    sector.readSectorLE(0x11, 2);
+    sector.saveSectorLE(0x11, 2).printVector(sectorData::dec);
+
     std::cout << "Total sectors: ";
-    sector.readSectorLE(0x13, 2);
+    sector.saveSectorLE(0x13, 2).printVector(sectorData::dec);
+
     std::cout << "Media type: ";
-    sector.readSectorLE(0x15, 1);
+    sector.saveSectorLE(0x15, 1).printVector(sectorData::hex);
+
     std::cout << "Sectors per FAT: ";
-    sector.readSectorLE(0x16, 2);
+    sector.saveSectorLE(0x16, 2).printVector(sectorData::dec);
+
     std::cout << "Sectors per track: ";
-    sector.readSectorLE(0x18, 2);
+    sector.saveSectorLE(0x18, 2).printVector(sectorData::dec);
+
     std::cout << "Number of heads: ";
-    sector.readSectorLE(0x1A, 2);
+    sector.saveSectorLE(0x1A, 2).printVector(sectorData::dec);
+
     std::cout << "Hidden sectors: ";
-    sector.readSectorLE(0x1C, 4);
+    sector.saveSectorLE(0x1C, 4).printVector(sectorData::dec);
+
     std::cout << "Total sectors: ";
-    sector.readSectorLE(0x20, 4);
+    sector.saveSectorLE(0x20, 4).printVector(sectorData::dec);
+
     std::cout << "Drive number: ";
-    sector.readSectorLE(0x24, 1);
+    sector.saveSectorLE(0x24, 1).printVector(sectorData::hex);
+
     std::cout << "Signature: ";
-    sector.readSectorLE(0x26, 1);
+    sector.saveSectorLE(0x26, 1).printVector(sectorData::hex);
+
     std::cout << "Volume ID: ";
-    sector.readSectorLE(0x27, 4);
+    sector.saveSectorLE(0x27, 4).printVector(sectorData::hex);
+
     std::cout << "Volume label: ";
-    sector.readSectorBE(0x2B, 11);
+    sector.saveSectorBE(0x2B, 11).printVector(sectorData::chr);
+
     std::cout << "File system type: ";
-    sector.readSectorLE(0x36, 8);
+    sector.saveSectorBE(0x36, 8).printVector(sectorData::chr);
+
     std::cout << "Bootable signature: ";
-    sector.readSectorLE(0x1FE, 2);
+    sector.saveSectorLE(0x1FE, 2).printVector(sectorData::hex);
 }
 
 int main() {
-    const wchar_t* diskPath = L"\\\\.\\PhysicalDrive3"; // Provide the path to your physical disk
-
-    readNTFS(diskPath);
-
-    system("pause");
-
-    return 0;
+    const wchar_t driveName[] = L"\\\\.\\PhysicalDrive3";
+    
+    const wchar_t* diskPath = L"\\\\.\\I:";
+    explainBootSector(diskPath);
+  
 }
