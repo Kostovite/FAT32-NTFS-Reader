@@ -5,11 +5,8 @@ using Windows.Storage;
 using Microsoft.UI.Xaml.Controls;
 using System.Collections.ObjectModel;
 using Microsoft.UI.Xaml.Media.Imaging;
-using System.Runtime.CompilerServices;
 using Windows.Storage.FileProperties;
 using System.Diagnostics;
-using Windows.ApplicationModel.Contacts;
-using Microsoft.UI;
 
 namespace DiskEntityInfo;
 
@@ -20,7 +17,6 @@ public sealed partial class MainWindow : WindowEx
         Title = "Disk Entity Info";
 
         // no UIElement is set for titlebar, default titlebar is created which extends to entire non client area
-        
 
         InitializeComponent();
         InitializeSampleTreeView();

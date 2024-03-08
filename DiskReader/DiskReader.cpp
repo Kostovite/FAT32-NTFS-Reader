@@ -1,205 +1,4 @@
-﻿#include <iostream>
-#include <iomanip>
-#include <windows.h>
-#include <winioctl.h>
-#include <vector>
-
-/// <summary>
-/// Class to represent part of the data of a disk sector
-/// </summary>
-class sectorData
-{
-private:
-    std::vector<char> _data;
-
-public:
-    //Enum for hex, dec, char
-    enum dataPresentation
-    {
-        hex = 16,
-        dec = 10,
-        chr = 256
-    };
-
-    //Constructor
-    sectorData(const std::vector<char>& data) : _data(data) {}
-
-    //Decstructor
-    ~sectorData() {}
-
-    //Operator = to copy data
-    sectorData& operator = (const sectorData& other)
-    {
-        if (this != &other)
-        {
-			this->_data = other._data;
-		}
-		return *this;
-	}
-
-    sectorData& operator = (const std::vector<char>& data)
-    {
-		this->_data = data;
-		return *this;
-	}
-
-    //Convert to vector
-    std::vector<char> toVector() const
-    {
-        return this->_data;
-    }
-
-    void printVector(dataPresentation presentation) {
-        switch (presentation) {
-        case hex:
-            for (const char& c : this->_data) {
-                std::cout << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(c & 0xFF) << " ";
-            }
-            break;
-        case dec:
-        {
-            unsigned long int dec = 0;
-            for (const char& c : this->_data) {
-                dec = (dec << 8) + (c & 0xFF);
-            }
-            std::cout << std::dec << dec;
-        }
-        break;
-        case chr:
-            for (const char& c : this->_data) {
-                if (isprint(c)) {
-                    std::cout << c;
-                }
-                else {
-                    std::cout << "."; // Print a dot for non-printable characters
-                }
-            }
-            break;
-        default:
-            throw std::runtime_error("Error: Invalid data presentation type.");
-        }
-
-        std::cout << std::endl;
-    }
-};
-
-// Define a struct to represent a disk sector
-/// <summary>
-/// Class to store a disk sector
-/// </summary>
-class DiskSector {
-private:
-    wchar_t* _diskPath;    // Disk path
-    int _sectorNum;        // Sector number
-    DWORD _bytesRead;      // Number of bytes read
-    char* _buffer;         // Sector data
-
-public:
-    // Constructor
-    /// <summary>
-    /// Constructor
-    /// </summary>
-    /// <param name="path">Path to the disk</param>
-    /// <param name="sector">Sector number</param>
-    DiskSector(const wchar_t* path, int sector) : _diskPath(const_cast<wchar_t*>(path)), _sectorNum(sector), _bytesRead(0) {
-        _buffer = new char[getSectorSize()];
-        this->readDiskSector();
-    }
-
-    // Destructor
-    ~DiskSector() {
-        delete[] _buffer;
-        _buffer = nullptr;
-    }
-
-    // Function to get the sector size
-    DWORD getSectorSize() {
-        HANDLE hDisk = CreateFileW(_diskPath, 0, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0, NULL);
-        if (hDisk == INVALID_HANDLE_VALUE) {
-            std::cerr << "Error: Unable to open disk." << std::endl;
-            return 0;
-        }
-
-        DWORD bytesReturned = 0;
-        DISK_GEOMETRY_EX diskGeometry;
-
-        if (!DeviceIoControl(hDisk, IOCTL_DISK_GET_DRIVE_GEOMETRY_EX, NULL, 0, &diskGeometry, sizeof(diskGeometry), &bytesReturned, NULL)) {
-            std::cerr << "Error: Unable to retrieve disk geometry." << std::endl;
-            CloseHandle(hDisk);
-            return 0;
-        }
-
-        CloseHandle(hDisk);
-        return diskGeometry.Geometry.BytesPerSector;
-    }
-
-    // Function to read a disk sector and store it in DiskSector object
-    void readDiskSector() {
-        HANDLE hDisk = CreateFileW(this->_diskPath, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0, NULL);
-        if (hDisk == INVALID_HANDLE_VALUE) {
-            std::cerr << "Error: Unable to open disk. Check permission!" << std::endl;
-            return;
-        }
-
-        LARGE_INTEGER li{};
-        li.QuadPart = this->_sectorNum * this->getSectorSize();
-        SetFilePointerEx(hDisk, li, NULL, FILE_BEGIN);
-
-        if (!ReadFile(hDisk, this->_buffer, this->getSectorSize(), &this->_bytesRead, NULL)) {
-            throw std::runtime_error("Error: Unable to read disk.");
-        }
-
-        CloseHandle(hDisk);
-    }
-
-    // LITTLE ENDIAN
-    sectorData saveSectorLE(int offset, int size) {
-        std::vector<char> data;
-
-        if (offset < 0 || offset + size > this->getSectorSize()) {
-            throw std::runtime_error("Error: Invalid offset and size.");
-        }
-
-        data.reserve(size);
-
-        for (int i = offset + size - 1; i >= offset; i--) {
-            data.push_back(static_cast<char>(this->_buffer[i]));
-        }
-
-        sectorData sectorData = data;
-
-        return sectorData;
-    }
-
-    // BIG ENDIAN
-    sectorData saveSectorBE(int offset, int size) {
-		std::vector<char> data;
-
-        if (offset < 0 || offset + size > this->getSectorSize()) {
-			throw std::runtime_error("Error: Invalid offset and size.");
-		}
-
-		data.reserve(size);
-
-        for (int i = offset; i < offset + size; i++) {
-			data.push_back(static_cast<char>(this->_buffer[i]));
-		}
-
-		sectorData sectorData = data;
-
-		return sectorData;
-	}
-
-    void printSector() {
-        for (int i = 0; i < this->getSectorSize(); i++) {
-			if (i % 16 == 0) std::cout << std::endl;
-			std::cout << std::setw(2) << std::setfill('0') << std::hex << std::uppercase << (int)(unsigned char)this->_buffer[i] << " ";
-			std::cout << std::dec << std::setfill(' ');
-		}
-        std::cout << std::endl;
-	}
-
-};
+﻿#include "DiskReader.h"
 
 //Explain partition entry
 void explainPartitionEntry(DiskSector &entry) {
@@ -235,6 +34,13 @@ void readMBR(const wchar_t* diskPath) {
     sector.printSector();
 
     explainPartitionEntry(sector);
+}
+
+//Read GPT
+void readGPT(const wchar_t* diskPath) {
+	//Create a DiskSector object for sector 1 of the disk
+	DiskSector sector(diskPath, 1);
+	sector.printSector();
 }
 
 //Explain the boot sector
@@ -297,7 +103,52 @@ void explainBootSector(const wchar_t* diskPath) {
     sector.saveSectorLE(0x1FE, 2).printVector(sectorData::hex);
 }
 
+std::vector<short> scanPhysicalDrives() {
+    std::vector<short> driveID;
+
+    for (int driveNumber = 0; driveNumber < 16; ++driveNumber) { // Assuming there are at most 16 physical drives
+        std::wstring drivePath = L"\\\\.\\PhysicalDrive" + std::to_wstring(driveNumber);
+
+        HANDLE hDisk = CreateFileW(drivePath.c_str(), 0, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0, NULL);
+
+        if (hDisk != INVALID_HANDLE_VALUE) {
+            // Successfully opened the drive, add its ID to the vector
+            driveID.push_back(static_cast<short>(driveNumber));
+
+            // Close the handle when done with it
+            CloseHandle(hDisk);
+        }
+        else {
+            // Drive not found, break the loop
+            break;
+        }
+    }
+
+    return driveID;
+}
+
+//Check if the disk is a MBR disk
+bool isMBR(const wchar_t* diskPath) {
+    DiskSector sector(diskPath, 0);
+	sector.printSector();
+
+	//Check if the first 2 bytes are 0x55AA
+    if (sector.saveSectorLE(0x1FE, 2).toVector() == std::vector<char>{(char)0x55, (char)0xAA}) {
+		return true;
+	}
+    else {
+		return false;
+	}
+}
+
 int main() {
-    const wchar_t driveName[] = L"\\\\.\\PhysicalDrive3";
-    readMBR(driveName);
+    std::vector<short> drives = scanPhysicalDrives();
+
+    std::wcout << L"Found " << drives.size() << L" physical drive(s)." << std::endl;
+    for (short id : drives) {
+        std::wcout << L"Physical drive ID: " << id << std::endl;
+    }
+
+
+    return 0;
 }
