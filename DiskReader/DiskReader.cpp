@@ -103,7 +103,7 @@ void explainBootSector(const wchar_t* diskPath) {
     sector.saveSectorLE(0x1FE, 2).printVector(sectorData::hex);
 }
 
-std::vector<short> scanPhysicalDrives() {
+std::vector<short> scanMBRPhysicalDrives() {
     std::vector<short> driveID;
 
     for (int driveNumber = 0; driveNumber < 16; ++driveNumber) { // Assuming there are at most 16 physical drives
@@ -111,44 +111,70 @@ std::vector<short> scanPhysicalDrives() {
 
         HANDLE hDisk = CreateFileW(drivePath.c_str(), 0, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0, NULL);
 
+        // If the handle is valid, and the disk is an MBR disk, add it to the list
         if (hDisk != INVALID_HANDLE_VALUE) {
-            // Successfully opened the drive, add its ID to the vector
-            driveID.push_back(static_cast<short>(driveNumber));
-
-            // Close the handle when done with it
-            CloseHandle(hDisk);
-        }
+            if (!isGPT(drivePath.c_str())) {
+				driveID.push_back(driveNumber);
+			}
+			CloseHandle(hDisk);
+		}
         else {
-            // Drive not found, break the loop
-            break;
-        }
+			break;
+		}
     }
 
     return driveID;
 }
 
-//Check if the disk is a MBR disk
-bool isMBR(const wchar_t* diskPath) {
-    DiskSector sector(diskPath, 0);
-	sector.printSector();
+std::vector<sectorData> scanPartitions(const wchar_t* diskPath)
+{
+    std::vector<sectorData> partitions;
 
-	//Check if the first 2 bytes are 0x55AA
-    if (sector.saveSectorLE(0x1FE, 2).toVector() == std::vector<char>{(char)0x55, (char)0xAA}) {
+	//Create a DiskSector object for sector 0 of the disk
+	DiskSector sector(diskPath, 0);
+
+	for (int ind = 0; ind < 4; ind++) {
+		sectorData partitionEntry = sector.saveSectorBE(0x1BE + 0x10 * ind, 16);
+		
+        //If the partition type is 0, it means the partition is not used
+        if (partitionEntry[4] == 0x00) {
+            partitions.push_back(partitionEntry);
+        }
+	}
+
+	return partitions;
+}
+
+//Check if the disk is a GPT disk
+bool isGPT(const wchar_t* diskPath) {
+	DiskSector sector(diskPath, 1);
+	sectorData signature = sector.saveSectorBE(0x00, 8);
+
+    if (signature == sectorData({ 0x45, 0x46, 0x49, 0x20, 0x50, 0x41, 0x52, 0x54 })) {
 		return true;
 	}
-    else {
-		return false;
-	}
+
+	return false;
 }
 
 int main() {
-    std::vector<short> drives = scanPhysicalDrives();
+    std::vector<short> drives = scanMBRPhysicalDrives();
 
-    std::wcout << L"Found " << drives.size() << L" physical drive(s)." << std::endl;
+    std::wcout << L"Found " << drives.size() << L" MBR physical drive(s)." << std::endl;
     for (short id : drives) {
         std::wcout << L"Physical drive ID: " << id << std::endl;
     }
 
+    //Scan the partitions of all the drives found
+    for (short id : drives) {
+		std::wstring drivePath = L"\\\\.\\PhysicalDrive" + std::to_wstring(id);
+		std::vector<sectorData> partitions = scanPartitions(drivePath.c_str());
+
+		std::wcout << L"Found " << partitions.size() << L" partition(s) on drive " << id << std::endl;
+        for (sectorData partition : partitions) {
+			partition.printVector(sectorData::hex);
+		}
+	}
 
     return 0;
 }

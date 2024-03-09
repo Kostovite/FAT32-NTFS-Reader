@@ -48,6 +48,38 @@ public:
         return *this;
     }
 
+    //Operator == to compare data
+    bool operator == (const sectorData& other) const
+    {
+        //Check by comparing each element
+        if (this->_data.size() != other._data.size())
+        {
+			return false;
+		}
+
+        for (size_t i = 0; i < this->_data.size(); i++)
+        {
+            if (this->_data[i] != other._data[i])
+            {
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	//Operator != to compare data
+	bool operator != (const sectorData& other) const
+	{
+		return !(*this == other);
+	}
+
+    //Operator [] to access data
+    char& operator [] (size_t index)
+    {
+		return this->_data[index];
+	}
+
     //Convert to vector
     std::vector<char> toVector() const
     {
@@ -151,6 +183,11 @@ public:
         _buffer = nullptr;
     }
 
+    //Get buffer
+    char* getBuffer() {
+		return _buffer;
+	}
+
     // Function to get the sector size
     DWORD getSectorSize() {
         HANDLE hDisk = CreateFileW(_diskPath, 0, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0, NULL);
@@ -196,7 +233,7 @@ public:
         std::vector<char> data;
 
         if (offset < 0 || offset + size > this->getSectorSize()) {
-            throw std::runtime_error("Error: Invalid offset and size.");
+            std::cout << "Error: Invalid offset and size." << std::endl;
         }
 
         data.reserve(size);
@@ -215,7 +252,7 @@ public:
         std::vector<char> data;
 
         if (offset < 0 || offset + size > this->getSectorSize()) {
-            throw std::runtime_error("Error: Invalid offset and size.");
+            std::cerr << "Error: Invalid offset and size." << std::endl;
         }
 
         data.reserve(size);
@@ -259,4 +296,8 @@ void explainBootSector(const wchar_t* diskPath);
 
 void readGPT(const wchar_t* diskPath);
 
-std::vector<short> scanPhysicalDrives();
+bool isGPT(const wchar_t* diskPath);
+
+std::vector<short> scanMBRPhysicalDrives();
+
+std::vector<sectorData> scanPartitions(const wchar_t* diskPath);
